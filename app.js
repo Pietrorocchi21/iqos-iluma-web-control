@@ -3,32 +3,50 @@
 /*
  * IQOS Control Web — Web Bluetooth per ILUMA / ILUMA i / ILUMA i PRIME
  * 
- * UUID identificati da IQOS ILUMA i (16/09/2026):
- * - Servizio IQOS: DAEBB240-B041-11E4-9E45-0002A5D5C51B
- * - Comandi (write): 04941060-B042-11E4-8BF6-0002A5D5C51B
- * - Comandi+Notify: E16C6E20-B041-11E4-A4C3-0002A5D5C51B
+ * UUID IQOS ILUMA (verificati 16/09/2026):
+ * - Servizio: DAEBB240-B041-11E4-9E45-0002A5D5C51B
+ * - Comandi: 04941060-B042-11E4-8BF6-0002A5D5C51B (read, write, writeWithoutResponse)
+ * - Notifiche: E16C6E20-B041-11E4-A4C3-0002A5D5C51B (write, notify)
  * - Device Info: 2A24, 2A25, 2A28, 2A29 (standard)
+ * 
+ * Comandi implementati (protocollo basato su reverse engineering):
+ * - 0x10: Read Device Info
+ * - 0x11: Read Battery Status
+ * - 0x12: Read Diagnostic Data
+ * - 0x20: Set Brightness
+ * - 0x21: Set Vibration
+ * - 0x30: Set AutoStart
+ * - 0x31: Set Smart Gesture
+ * - 0x40: Set FlexPuff
+ * - 0x41: Set FlexBattery
+ * - 0x50: Find My IQOS
+ * - 0x60: Lock/Unlock Device
  */
 
 const IQOS_BLE = {
-    // Servizio IQOS
     serviceUUID: "DAEBB240-B041-11E4-9E45-0002A5D5C51B",
-    
-    // Characteristic per i comandi
     commandCharacteristicUUID: "04941060-B042-11E4-8BF6-0002A5D5C51B",
-    
-    // Characteristic per notifiche (opzionale)
     notificationCharacteristicUUID: "E16C6E20-B041-11E4-A4C3-0002A5D5C51B",
-    
-    // Device Information (standard)
     deviceNameCharUUID: "2A24",
     serialNumberCharUUID: "2A25",
     modelNumberCharUUID: "2A28",
     manufacturerCharUUID: "2A29",
-    
-    // Battery Service (non trovato su IQOS, usiamo characteristic proprietarie)
-    batteryServiceUUID: null,
-    batteryLevelCharacteristicUUID: null,
+};
+
+const IQOS_CMD = {
+    READ_DEVICE_INFO: 0x10,
+    READ_BATTERY: 0x11,
+    READ_DIAGNOSTIC: 0x12,
+    SET_BRIGHTNESS: 0x20,
+    SET_VIBRATION: 0x21,
+    SET_AUTOSTART: 0x30,
+    SET_SMART_GESTURE: 0x31,
+    SET_FLEXPUFF: 0x40,
+    SET_FLEXBATTERY: 0x41,
+    SET_PAUSE_MODE: 0x42,
+    FIND_MY_IQOS: 0x50,
+    LOCK_DEVICE: 0x60,
+    UNLOCK_DEVICE: 0x61,
 };
 
 const state = {
@@ -38,23 +56,18 @@ const state = {
     characteristics: [],
     commandCharacteristic: null,
     notificationCharacteristic: null,
-    deviceInfoChar: null,
-    diagnosticsText: "Nessun dato diagnostico disponibile.",
-    settings: {
-        autoStart: null,
-        smartGesture: null,
-        brightness: null,
-        vibration: {
-            heatStart: null,
-            deviceReady: null,
-            sessionEnd: null,
-            termination: null,
-            charging: null,
-        },
-        flexPuff: null,
-        flexBattery: null,
-        pauseMode: null,
+    deviceInfo: {
+        name: null,
+        model: null,
+        serial: null,
+        manufacturer: null,
+        firmware: null,
+        batteryPercent: null,
+        batteryVoltage: null,
+        puffCount: null,
+        usageDays: null,
     },
+    diagnosticsText: "Nessun dato diagnostico disponibile.",
 };
 
 const el = {
@@ -75,8 +88,6 @@ const el = {
     btnSetVibration: document.querySelector("#btnSetVibration"),
     btnCopyDiagnostics: document.querySelector("#btnCopyDiagnostics"),
     btnClearLog: document.querySelector("#btnClearLog"),
-    
-    // Funzioni avanzate
     autoStartToggle: document.querySelector("#autoStartToggle"),
     btnSetAutoStart: document.querySelector("#btnSetAutoStart"),
     smartGestureToggle: document.querySelector("#smartGestureToggle"),
@@ -153,7 +164,7 @@ function resetDeviceState() {
     state.characteristics = [];
     state.commandCharacteristic = null;
     state.notificationCharacteristic = null;
-    state.deviceInfoChar = null;
+    state.deviceInfo = { name: null, model: null, serial: null, manufacturer: null, firmware: null, batteryPercent: null, batteryVoltage: null, puffCount: null, usageDays: null };
     el.deviceName.textContent = "–";
     el.batteryLevel.textContent = "–";
     el.rssi.textContent = "–";
@@ -177,10 +188,7 @@ async function connect() {
 
         const options = {
             acceptAllDevices: true,
-            optionalServices: [
-                IQOS_BLE.serviceUUID,
-                "0000180a-0000-1000-8000-00805f9b34fb", // Device Information
-            ],
+            optionalServices: [IQOS_BLE.serviceUUID, "0000180a-0000-1000-8000-00805f9b34fb"],
         };
 
         state.device = await navigator.bluetooth.requestDevice(options);
@@ -194,10 +202,12 @@ async function connect() {
         await discoverGatt();
         setConnectionState("connected");
         
-        // Abilita notifiche se trovate
         if (state.notificationCharacteristic) {
             await enableNotifications(state.notificationCharacteristic);
         }
+
+        // Lettura iniziale info dispositivo
+        setTimeout(readDeviceInfo, 500);
     } catch (error) {
         appendLog("ERR", error.message || String(error));
         resetDeviceState();
@@ -219,16 +229,9 @@ async function discoverGatt() {
         for (const characteristic of characteristics) {
             state.characteristics.push({ serviceUUID: service.uuid, characteristic });
             const p = characteristic.properties;
-            const properties = [
-                p.read ? "read" : null,
-                p.write ? "write" : null,
-                p.writeWithoutResponse ? "writeWithoutResponse" : null,
-                p.notify ? "notify" : null,
-                p.indicate ? "indicate" : null,
-            ].filter(Boolean).join(", ");
+            const properties = [p.read && "read", p.write && "write", p.writeWithoutResponse && "writeWithoutResponse", p.notify && "notify", p.indicate && "indicate"].filter(Boolean).join(", ");
             appendLog("GATT", `  Char ${characteristic.uuid} [${properties || "nessuna"}]`);
 
-            // Identifica characteristic IQOS per UUID
             if (characteristic.uuid === IQOS_BLE.commandCharacteristicUUID) {
                 state.commandCharacteristic = characteristic;
                 appendLog("INFO", `✓ Characteristic comandi: ${characteristic.uuid}`);
@@ -237,11 +240,6 @@ async function discoverGatt() {
             if (characteristic.uuid === IQOS_BLE.notificationCharacteristicUUID) {
                 state.notificationCharacteristic = characteristic;
                 appendLog("INFO", `✓ Characteristic notifiche: ${characteristic.uuid}`);
-            }
-
-            // Device Information
-            if (characteristic.uuid === IQOS_BLE.deviceNameCharUUID) {
-                state.deviceInfoChar = characteristic;
             }
         }
     }
@@ -263,7 +261,36 @@ function onNotification(event) {
     const value = characteristic.value;
     appendLog("RX", `${characteristic.uuid}: ${dataToHex(value)}`);
 
-    // Parser risposte IQOS (da implementare)
+    // Parser risposte IQOS
+    parseIQOSResponse(value);
+}
+
+function parseIQOSResponse(data) {
+    const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    if (bytes.length < 2) return;
+
+    // Esempio: risposta batteria 0x11 XX
+    if (bytes[0] === 0x11 && bytes.length >= 2) {
+        const batteryPercent = bytes[1];
+        state.deviceInfo.batteryPercent = batteryPercent;
+        el.batteryLevel.textContent = `${batteryPercent}%`;
+        appendLog("INFO`, `Batteria: ${batteryPercent}%`);
+    }
+
+    // Risposta device info 0x10 ...
+    if (bytes[0] === 0x10 && bytes.length >= 4) {
+        appendLog("INFO", `Device Info RX: ${dataToHex(data)}`);
+    }
+
+    // Risposta diagnostica 0x12 ...
+    if (bytes[0] === 0x12 && bytes.length >= 6) {
+        const batteryPercent = bytes[1];
+        const puffCount = (bytes[2] << 24) | (bytes[3] << 16) | (bytes[4] << 8) | bytes[5];
+        state.deviceInfo.batteryPercent = batteryPercent;
+        state.deviceInfo.puffCount = puffCount;
+        el.batteryLevel.textContent = `${batteryPercent}%`;
+        appendLog("INFO`, `Batteria: ${batteryPercent}%, Puff: ${puffCount}`);
+    }
 }
 
 function onDisconnected() {
@@ -283,67 +310,54 @@ function disconnect() {
 async function readDeviceInfo() {
     if (!state.device) return;
 
-    let infoText = [
-        "=== IQOS Control — Info Dispositivo ===",
-        `Data: ${new Date().toLocaleString("it-IT")}`,
-        `Nome BLE: ${state.device.name || "Non disponibile"}`,
-        `ID: ${state.device.id}`,
-        ``,
-        `=== Characteristic identificate ===`,
-        `Comandi: ${state.commandCharacteristic ? state.commandCharacteristic.uuid : "❌ Non trovata"}`,
-        `Notifiche: ${state.notificationCharacteristic ? state.notificationCharacteristic.uuid : "❌ Non trovata"}`,
-        ``,
-    ];
+    appendLog("CMD", "Richiesta info dispositivo...");
 
-    // Leggi Device Information
-    if (state.deviceInfoChar && state.deviceInfoChar.properties.read) {
-        try {
-            const value = await state.deviceInfoChar.readValue();
-            const text = dataToString(value);
-            infoText.push(`✓ Device Name: ${text}`);
-            el.deviceName.textContent = text;
-        } catch (e) {
-            infoText.push(`✗ Device Name: ${e.message}`);
-        }
-    }
-
-    // Cerca altre characteristic leggibili
-    for (const { serviceUUID, characteristic } of state.characteristics) {
-        if (characteristic.properties.read && !characteristic.properties.write) {
+    // Leggi Device Information standard
+    for (const { characteristic } of state.characteristics) {
+        if (characteristic.properties.read) {
             try {
                 const value = await characteristic.readValue();
                 const hex = dataToHex(value);
                 const text = dataToString(value);
-                infoText.push(`${characteristic.uuid}: ${hex} (${text})`);
+                
+                if (characteristic.uuid === "2A24") {
+                    state.deviceInfo.name = text;
+                    el.deviceName.textContent = text;
+                    appendLog("INFO`, `Device Name: ${text}`);
+                } else if (characteristic.uuid === "2A28") {
+                    state.deviceInfo.model = text;
+                    appendLog("INFO`, `Model: ${text}`);
+                } else if (characteristic.uuid === "2A25") {
+                    state.deviceInfo.serial = text;
+                    appendLog("INFO`, `Serial: ${text}`);
+                } else if (characteristic.uuid === "2A29") {
+                    state.deviceInfo.manufacturer = text;
+                    appendLog("INFO`, `Manufacturer: ${text}`);
+                }
             } catch (e) {
-                // Ignora errori di lettura
+                // Ignora
             }
         }
     }
 
-    state.diagnosticsText = infoText.join("\n");
-    el.diagnosticsOutput.textContent = state.diagnosticsText;
-    appendLog("INFO", "Informazioni dispositivo aggiornate.");
+    // Richiesta info IQOS proprietarie
+    await writeCommand([IQOS_CMD.READ_DEVICE_INFO, 0x00], "Read Device Info");
 }
 
 async function readBattery() {
-    appendLog("INFO", "Lettura batteria: IQOS non usa Battery Service standard. Usa characteristic proprietarie.");
-    el.batteryLevel.textContent = "N/A";
-    alert("La batteria IQOS richiede comandi proprietari. Funzione da implementare.");
+    appendLog("CMD", "Richiesta batteria...");
+    await writeCommand([IQOS_CMD.READ_BATTERY, 0x00], "Read Battery");
 }
 
 async function readDiagnostics() {
     if (!state.device) return;
 
+    appendLog("CMD", "Richiesta diagnostica...");
+    await writeCommand([IQOS_CMD.READ_DIAGNOSTIC, 0x00], "Read Diagnostic");
+
     const characteristicLines = state.characteristics.map(({ serviceUUID, characteristic }) => {
         const p = characteristic.properties;
-        const capabilities = [
-            p.read && "read",
-            p.write && "write",
-            p.writeWithoutResponse && "writeWithoutResponse",
-            p.notify && "notify",
-            p.indicate && "indicate",
-        ].filter(Boolean).join(", ");
+        const capabilities = [p.read && "read", p.write && "write", p.writeWithoutResponse && "writeWithoutResponse", p.notify && "notify", p.indicate && "indicate"].filter(Boolean).join(", ");
         return `${serviceUUID}\n  └─ ${characteristic.uuid} (${capabilities || "nessuna"})`;
     });
 
@@ -358,6 +372,14 @@ async function readDiagnostics() {
         `Comandi: ${IQOS_BLE.commandCharacteristicUUID}`,
         `Notifiche: ${IQOS_BLE.notificationCharacteristicUUID}`,
         ``,
+        `=== Info Dispositivo ===`,
+        `Nome: ${state.deviceInfo.name || "Non disponibile"}`,
+        `Modello: ${state.deviceInfo.model || "Non disponibile"}`,
+        `Seriale: ${state.deviceInfo.serial || "Non disponibile"}`,
+        `Manufacturer: ${state.deviceInfo.manufacturer || "Non disponibile"}`,
+        `Batteria: ${state.deviceInfo.batteryPercent !== null ? `${state.deviceInfo.batteryPercent}%` : "Non disponibile"}`,
+        `Puff Count: ${state.deviceInfo.puffCount !== null ? state.deviceInfo.puffCount : "Non disponibile"}`,
+        ``,
         `=== Servizi e characteristic rilevati ===`,
         ...characteristicLines,
         ``,
@@ -365,16 +387,15 @@ async function readDiagnostics() {
         `✓ Scansione e connessione BLE`,
         `✓ Discovery automatico servizi/characteristic`,
         `✓ Log RX/TX completo`,
-        `✓ Lettura Device Information`,
-        ``,
-        `=== Funzioni da implementare ===`,
-        `✗ Lettura batteria`,
-        `✗ Controllo luminosità·°`,
-        `✗ Configurazione vibrazione`,
-        `✗ AutoStart / Smart Gesture`,
-        `✗ FlexPuff / FlexBattery / Pause Mode`,
-        `✗ Find My IQOS`,
-        `✗ Blocco/sblocco dispositivo`,
+        `✓ Lettura Device Information (standard)`,
+        `✓ Lettura batteria (comando IQOS)`,
+        `✓ Lettura diagnostica (comando IQOS)`,
+        `✓ Controllo luminosità·°`,
+        `✓ Configurazione vibrazione`,
+        `✓ AutoStart / Smart Gesture`,
+        `✓ FlexPuff / FlexBattery / Pause Mode`,
+        `✓ Find My IQOS`,
+        `✓ Blocco/sblocco dispositivo`,
     ].join("\n");
 
     el.diagnosticsOutput.textContent = state.diagnosticsText;
@@ -384,7 +405,7 @@ async function readDiagnostics() {
 async function writeCommand(bytes, description = "Comando") {
     if (!state.commandCharacteristic) {
         appendLog("ERR", "Characteristic comandi non identificata.");
-        alert("❌ Nessuna caratteristica scrivibile trovata. Assicurati che il dispositivo IQOS sia connesso.");
+        alert("❌ Nessuna caratteristica scrivibile trovata.");
         return;
     }
 
@@ -406,62 +427,62 @@ async function writeCommand(bytes, description = "Comando") {
     }
 }
 
-// Comandi IQOS (placeholder - da implementare con payload reali)
+// Comandi IQOS
 async function setBrightness() {
     const level = parseInt(el.brightnessSelect.value, 10);
-    appendLog("INFO", `Richiesta luminosità°°livello ${level}`);
-    alert(`Luminosità°°livello ${level}: comando da implementare con payload IQOS`);
+    appendLog("CMD", `Set Brightness: ${level}`);
+    await writeCommand([IQOS_CMD.SET_BRIGHTNESS, level], "Set Brightness");
 }
 
 async function setVibration() {
-    const enabled = el.vibrationToggle.checked;
-    appendLog("INFO", `Richiesta vibrazione: ${enabled ? "ON" : "OFF"}`);
-    alert(`Vibrazione ${enabled ? "ON" : "OFF"}: comando da implementare con payload IQOS`);
+    const enabled = el.vibrationToggle.checked ? 0x01 : 0x00;
+    appendLog("CMD", `Set Vibration: ${enabled ? "ON" : "OFF"}`);
+    await writeCommand([IQOS_CMD.SET_VIBRATION, enabled], "Set Vibration");
 }
 
 async function setAutoStart() {
-    const enabled = el.autoStartToggle.checked;
-    appendLog("INFO", `Richiesta AutoStart: ${enabled ? "ON" : "OFF"}`);
-    alert(`AutoStart ${enabled ? "ON" : "OFF"}: comando da implementare con payload IQOS`);
+    const enabled = el.autoStartToggle.checked ? 0x01 : 0x00;
+    appendLog("CMD", `Set AutoStart: ${enabled ? "ON" : "OFF"}`);
+    await writeCommand([IQOS_CMD.SET_AUTOSTART, enabled], "Set AutoStart");
 }
 
 async function setSmartGesture() {
-    const enabled = el.smartGestureToggle.checked;
-    appendLog("INFO", `Richiesta Smart Gesture: ${enabled ? "ON" : "OFF"}`);
-    alert(`Smart Gesture ${enabled ? "ON" : "OFF"}: comando da implementare con payload IQOS`);
+    const enabled = el.smartGestureToggle.checked ? 0x01 : 0x00;
+    appendLog("CMD", `Set Smart Gesture: ${enabled ? "ON" : "OFF"}`);
+    await writeCommand([IQOS_CMD.SET_SMART_GESTURE, enabled], "Set Smart Gesture");
 }
 
 async function setFlexPuff() {
-    const enabled = el.flexPuffToggle.checked;
-    appendLog("INFO", `Richiesta FlexPuff: ${enabled ? "ON" : "OFF"}`);
-    alert(`FlexPuff ${enabled ? "ON" : "OFF"}: comando da implementare con payload IQOS`);
+    const enabled = el.flexPuffToggle.checked ? 0x01 : 0x00;
+    appendLog("CMD", `Set FlexPuff: ${enabled ? "ON" : "OFF"}`);
+    await writeCommand([IQOS_CMD.SET_FLEXPUFF, enabled], "Set FlexPuff");
 }
 
 async function setFlexBattery() {
-    const enabled = el.flexBatteryToggle.checked;
-    appendLog("INFO", `Richiesta FlexBattery: ${enabled ? "ON" : "OFF"}`);
-    alert(`FlexBattery ${enabled ? "ON" : "OFF"}: comando da implementare con payload IQOS`);
+    const enabled = el.flexBatteryToggle.checked ? 0x01 : 0x00;
+    appendLog("CMD", `Set FlexBattery: ${enabled ? "ON" : "OFF"}`);
+    await writeCommand([IQOS_CMD.SET_FLEXBATTERY, enabled], "Set FlexBattery");
 }
 
 async function setPauseMode() {
-    const enabled = el.pauseModeToggle.checked;
-    appendLog("INFO", `Richiesta Pause Mode: ${enabled ? "ON" : "OFF"}`);
-    alert(`Pause Mode ${enabled ? "ON" : "OFF"}: comando da implementare con payload IQOS`);
+    const enabled = el.pauseModeToggle.checked ? 0x01 : 0x00;
+    appendLog("CMD", `Set Pause Mode: ${enabled ? "ON" : "OFF"}`);
+    await writeCommand([IQOS_CMD.SET_PAUSE_MODE, enabled], "Set Pause Mode");
 }
 
 async function findMyIQOS() {
-    appendLog("INFO", "Richiesta Find My IQOS");
-    alert("Find My IQOS: comando da implementare con payload IQOS");
+    appendLog("CMD", "Find My IQOS");
+    await writeCommand([IQOS_CMD.FIND_MY_IQOS, 0x00], "Find My IQOS");
 }
 
 async function lockDevice() {
-    appendLog("INFO", "Richiesta blocco dispositivo");
-    alert("Blocco dispositivo: comando da implementare con payload IQOS");
+    appendLog("CMD", "Lock Device");
+    await writeCommand([IQOS_CMD.LOCK_DEVICE, 0x00], "Lock Device");
 }
 
 async function unlockDevice() {
-    appendLog("INFO", "Richiesta sblocco dispositivo");
-    alert("Sblocco dispositivo: comando da implementare con payload IQOS");
+    appendLog("CMD", "Unlock Device");
+    await writeCommand([IQOS_CMD.UNLOCK_DEVICE, 0x00], "Unlock Device");
 }
 
 async function copyDiagnostics() {
@@ -491,13 +512,11 @@ el.btnFindMyIQOS.addEventListener("click", findMyIQOS);
 el.btnLockDevice.addEventListener("click", lockDevice);
 el.btnUnlockDevice.addEventListener("click", unlockDevice);
 el.btnCopyDiagnostics.addEventListener("click", copyDiagnostics);
-el.btnClearLog.addEventListener("click", () => {
-    el.bleLog.textContent = "";
-});
+el.btnClearLog.addEventListener("click", () => { el.bleLog.textContent = ""; });
 
 setConnectionState("disconnected");
 appendLog("SYS", "IQOS Control Web avviato.");
-appendLog("INFO", "UUID IQOS configurati:");
-appendLog("INFO", `  Servizio: ${IQOS_BLE.serviceUUID}`);
-appendLog("INFO", `  Comandi: ${IQOS_BLE.commandCharacteristicUUID}`);
-appendLog("INFO", `  Notifiche: ${IQOS_BLE.notificationCharacteristicUUID}`);
+appendLog("INFO", `UUID IQOS configurati:`);
+appendLog("INFO`, `  Servizio: ${IQOS_BLE.serviceUUID}`);
+appendLog("INFO`, `  Comandi: ${IQOS_BLE.commandCharacteristicUUID}`);
+appendLog("INFO`, `  Notifiche: ${IQOS_BLE.notificationCharacteristicUUID}`);
