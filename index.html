@@ -14,6 +14,7 @@
         </header>
 
         <main class="main">
+            <!-- Stato connessione -->
             <section class="card">
                 <h2>Stato</h2>
                 <div class="row">
@@ -34,6 +35,7 @@
                 </div>
             </section>
 
+            <!-- Controlli principali -->
             <section class="card">
                 <h2>Controlli</h2>
                 <div class="buttons">
@@ -41,16 +43,17 @@
                     <button id="btnDisconnect" class="btn" disabled>Disconnetti</button>
                 </div>
                 <div class="buttons">
-                    <button id="btnReadInfo" class="btn" disabled>Leggi info dispositivo</button>
-                    <button id="btnReadBattery" class="btn" disabled>Leggi batteria</button>
-                    <button id="btnReadDiagnostics" class="btn" disabled>Leggi diagnostica</button>
+                    <button id="btnReadInfo" class="btn">Leggi info</button>
+                    <button id="btnReadBattery" class="btn">Leggi batteria</button>
+                    <button id="btnReadDiagnostics" class="btn">Diagnostica</button>
                 </div>
             </section>
 
+            <!-- Impostazioni rapide -->
             <section class="card">
                 <h2>Impostazioni rapide</h2>
                 <div class="row">
-                    <span>Luminosità»»</span>
+                    <span>Luminosità·°</span>
                     <select id="brightnessSelect" class="select" disabled>
                         <option value="0">Bassa</option>
                         <option value="1">Media</option>
@@ -59,7 +62,7 @@
                     <button id="btnSetBrightness" class="btn btn-sm" disabled>Applica</button>
                 </div>
                 <div class="row">
-                    <span>Vibrazione (esempio) »</span>
+                    <span>Vibrazione</span>
                     <label class="switch">
                         <input type="checkbox" id="vibrationToggle" disabled />
                         <span class="slider"></span>
@@ -68,6 +71,62 @@
                 </div>
             </section>
 
+            <!-- Funzioni intelligenti -->
+            <section class="card">
+                <h2>Funzioni intelligenti</h2>
+                <div class="row">
+                    <span>AutoStart</span>
+                    <label class="switch">
+                        <input type="checkbox" id="autoStartToggle" disabled />
+                        <span class="slider"></span>
+                    </label>
+                    <button id="btnSetAutoStart" class="btn btn-sm" disabled>Salva</button>
+                </div>
+                <div class="row">
+                    <span>Smart Gesture</span>
+                    <label class="switch">
+                        <input type="checkbox" id="smartGestureToggle" disabled />
+                        <span class="slider"></span>
+                    </label>
+                    <button id="btnSetSmartGesture" class="btn btn-sm" disabled>Salva</button>
+                </div>
+                <div class="row">
+                    <span>FlexPuff</span>
+                    <label class="switch">
+                        <input type="checkbox" id="flexPuffToggle" disabled />
+                        <span class="slider"></span>
+                    </label>
+                    <button id="btnSetFlexPuff" class="btn btn-sm" disabled>Salva</button>
+                </div>
+                <div class="row">
+                    <span>FlexBattery</span>
+                    <label class="switch">
+                        <input type="checkbox" id="flexBatteryToggle" disabled />
+                        <span class="slider"></span>
+                    </label>
+                    <button id="btnSetFlexBattery" class="btn btn-sm" disabled>Salva</button>
+                </div>
+                <div class="row">
+                    <span>Pause Mode</span>
+                    <label class="switch">
+                        <input type="checkbox" id="pauseModeToggle" disabled />
+                        <span class="slider"></span>
+                    </label>
+                    <button id="btnSetPauseMode" class="btn btn-sm" disabled>Salva</button>
+                </div>
+            </section>
+
+            <!-- Sicurezza -->
+            <section class="card">
+                <h2>Sicurezza</h2>
+                <div class="buttons">
+                    <button id="btnFindMyIQOS" class="btn" disabled>Trova IQOS</button>
+                    <button id="btnLockDevice" class="btn" disabled>Blocca</button>
+                    <button id="btnUnlockDevice" class="btn" disabled>Sblocca</button>
+                </div>
+            </section>
+
+            <!-- Diagnostica -->
             <section class="card">
                 <h2>Diagnostica</h2>
                 <pre id="diagnosticsOutput" class="code-block">Nessun dato diagnostico disponibile.</pre>
@@ -76,6 +135,7 @@
                 </div>
             </section>
 
+            <!-- Log BLE -->
             <section class="card">
                 <h2>Log BLE</h2>
                 <pre id="bleLog" class="code-block"></pre>
