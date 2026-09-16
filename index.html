@@ -1,160 +1,62 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8" />
-    <title>IQOS Control (Web)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IQOS Control</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="app">
-        <header class="header">
-            <h1>IQOS Control</h1>
-            <p class="subtitle">Web Bluetooth per ILUMA / ILUMA i / ILUMA i PRIME</p>
-        </header>
+  <main class="app">
+    <header class="header">
+      <h1>IQOS Control</h1>
+      <p class="subtitle">Diagnostica BLE sperimentale</p>
+    </header>
 
-        <main class="main">
-            <!-- Stato connessione -->
-            <section class="card">
-                <h2>Stato</h2>
-                <div class="row">
-                    <span>Connessione</span>
-                    <span id="connectionState" class="badge badge-secondary">Disconnesso</span>
-                </div>
-                <div class="row">
-                    <span>Dispositivo</span>
-                    <span id="deviceName">–</span>
-                </div>
-                <div class="row">
-                    <span>Batteria</span>
-                    <span id="batteryLevel">–</span>
-                </div>
-                <div class="row">
-                    <span>Segnale (RSSI)</span>
-                    <span id="rssi">–</span>
-                </div>
-            </section>
+    <section class="card">
+      <h2>Stato</h2>
+      <div class="row"><span>Connessione</span><span id="connectionState" class="badge badge-secondary">Disconnesso</span></div>
+      <div class="row"><span>Dispositivo</span><span id="deviceName">–</span></div>
+      <div class="row"><span>Batteria</span><span id="batteryLevel">–</span></div>
+      <div class="buttons">
+        <button id="btnConnect" class="btn btn-primary">Connetti BLE</button>
+        <button id="btnDisconnect" class="btn" disabled>Disconnetti</button>
+      </div>
+    </section>
 
-            <!-- Controlli principali -->
-            <section class="card">
-                <h2>Controlli</h2>
-                <div class="buttons">
-                    <button id="btnConnect" class="btn btn-primary">Connetti</button>
-                    <button id="btnDisconnect" class="btn" disabled>Disconnetti</button>
-                </div>
-                <div class="buttons">
-                    <button id="btnReadInfo" class="btn">Leggi info</button>
-                    <button id="btnReadBattery" class="btn">Leggi batteria</button>
-                    <button id="btnReadDiagnostics" class="btn">Diagnostica</button>
-                </div>
-            </section>
+    <section class="card">
+      <h2>Letture verificate</h2>
+      <p class="subtitle">I comandi sotto sono richieste di lettura ricavate dalla crate Rust. I dati restano raw finché il parser non è validato sul dispositivo.</p>
+      <div class="buttons">
+        <button id="btnReadInfo" class="btn" disabled>Leggi info</button>
+        <button id="btnReadBattery" class="btn" disabled>Leggi batteria raw</button>
+        <button id="btnReadBrightness" class="btn" disabled>Leggi luminosità</button>
+        <button id="btnReadVoltage" class="btn" disabled>Leggi tensione</button>
+        <button id="btnReadTelemetry" class="btn" disabled>Leggi telemetria</button>
+        <button id="btnReadDays" class="btn" disabled>Leggi giorni d’uso</button>
+      </div>
+    </section>
 
-            <!-- Impostazioni rapide -->
-            <section class="card">
-                <h2>Impostazioni rapide</h2>
-                <div class="row">
-                    <span>Luminosità·°</span>
-                    <select id="brightnessSelect" class="select" disabled>
-                        <option value="0">Bassa</option>
-                        <option value="1">Media</option>
-                        <option value="2">Alta</option>
-                    </select>
-                    <button id="btnSetBrightness" class="btn btn-sm" disabled>Applica</button>
-                </div>
-                <div class="row">
-                    <span>Vibrazione</span>
-                    <label class="switch">
-                        <input type="checkbox" id="vibrationToggle" disabled />
-                        <span class="slider"></span>
-                    </label>
-                    <button id="btnSetVibration" class="btn btn-sm" disabled>Salva</button>
-                </div>
-            </section>
+    <section class="card">
+      <h2>Diagnostica</h2>
+      <pre id="diagnosticsOutput" class="code-block">Nessun dato diagnostico disponibile.</pre>
+      <div class="buttons">
+        <button id="btnReadDiagnostics" class="btn" disabled>Aggiorna diagnostica</button>
+        <button id="btnCopyDiagnostics" class="btn btn-sm" disabled>Copia diagnostica</button>
+      </div>
+    </section>
 
-            <!-- Funzioni intelligenti -->
-            <section class="card">
-                <h2>Funzioni intelligenti</h2>
-                <div class="row">
-                    <span>AutoStart</span>
-                    <label class="switch">
-                        <input type="checkbox" id="autoStartToggle" disabled />
-                        <span class="slider"></span>
-                    </label>
-                    <button id="btnSetAutoStart" class="btn btn-sm" disabled>Salva</button>
-                </div>
-                <div class="row">
-                    <span>Smart Gesture</span>
-                    <label class="switch">
-                        <input type="checkbox" id="smartGestureToggle" disabled />
-                        <span class="slider"></span>
-                    </label>
-                    <button id="btnSetSmartGesture" class="btn btn-sm" disabled>Salva</button>
-                </div>
-                <div class="row">
-                    <span>FlexPuff</span>
-                    <label class="switch">
-                        <input type="checkbox" id="flexPuffToggle" disabled />
-                        <span class="slider"></span>
-                    </label>
-                    <button id="btnSetFlexPuff" class="btn btn-sm" disabled>Salva</button>
-                </div>
-                <div class="row">
-                    <span>FlexBattery</span>
-                    <label class="switch">
-                        <input type="checkbox" id="flexBatteryToggle" disabled />
-                        <span class="slider"></span>
-                    </label>
-                    <button id="btnSetFlexBattery" class="btn btn-sm" disabled>Salva</button>
-                </div>
-                <div class="row">
-                    <span>Pause Mode</span>
-                    <label class="switch">
-                        <input type="checkbox" id="pauseModeToggle" disabled />
-                        <span class="slider"></span>
-                    </label>
-                    <button id="btnSetPauseMode" class="btn btn-sm" disabled>Salva</button>
-                </div>
-            </section>
+    <section class="card">
+      <h2>Log BLE</h2>
+      <pre id="bleLog" class="code-block"></pre>
+      <div class="buttons">
+        <button id="btnCopyLog" class="btn btn-sm">Copia log</button>
+        <button id="btnClearLog" class="btn btn-sm">Pulisci log</button>
+      </div>
+    </section>
 
-            <!-- Sicurezza -->
-            <section class="card">
-                <h2>Sicurezza</h2>
-                <div class="buttons">
-                    <button id="btnFindMyIQOS" class="btn" disabled>Trova IQOS</button>
-                    <button id="btnLockDevice" class="btn" disabled>Blocca</button>
-                    <button id="btnUnlockDevice" class="btn" disabled>Sblocca</button>
-                </div>
-            </section>
-
-            <!-- Diagnostica -->
-            <section class="card">
-                <h2>Diagnostica</h2>
-                <pre id="diagnosticsOutput" class="code-block">Nessun dato diagnostico disponibile.</pre>
-                <div class="buttons">
-                    <button id="btnCopyDiagnostics" class="btn btn-sm" disabled>Copia diagnostica</button>
-                </div>
-            </section>
-
-            <!-- Log BLE -->
-            <section class="card">
-                <h2>Log BLE</h2>
-                <pre id="bleLog" class="code-block"></pre>
-                <div class="buttons">
-                    <button id="btnCopyLog" class="btn btn-sm">Copia log</button>
-                    <button id="btnClearLog" class="btn btn-sm">Pulisci log</button>
-                </div>
-            </section>
-        </main>
-
-        <footer class="footer">
-            <p>
-                Solo per uso personale e sperimentale. Non affiliato con IQOS/PMI.
-                <br />
-                Web Bluetooth: Chrome/Edge su desktop o Android. HTTPS o localhost richiesti.
-            </p>
-        </footer>
-    </div>
-
-    <script src="app.js"></script>
+    <footer class="footer">Uso sperimentale. Nessuna funzione di configurazione viene inviata in questa build.</footer>
+  </main>
+  <script src="app.js"></script>
 </body>
 </html>
