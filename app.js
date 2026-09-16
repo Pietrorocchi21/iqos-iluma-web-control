@@ -1,18 +1,14 @@
 "use strict";
 
-/*
- * IQOS Control Web — Web Bluetooth per ILUMA / ILUMA i / ILUMA i PRIME
- * 
- * UUID IQOS ILUMA (verificati 16/09/2026):
- * - Servizio: DAEBB240-B041-11E4-9E45-0002A5D5C51B
- * - Comandi: 04941060-B042-11E4-8BF6-0002A5D5C51B (read, write, writeWithoutResponse)
- * - Notifiche: E16C6E20-B041-11E4-A4C3-0002A5D5C51B (write, notify)
- */
-
 const IQOS_BLE = {
     serviceUUID: "DAEBB240-B041-11E4-9E45-0002A5D5C51B",
     commandCharacteristicUUID: "04941060-B042-11E4-8BF6-0002A5D5C51B",
     notificationCharacteristicUUID: "E16C6E20-B041-11E4-A4C3-0002A5D5C51B",
+    // Characteristic per lettura dati
+    batteryCharUUID: "77F38A30-2B2C-489A-BE71-29E93A04A90A",
+    statsCharUUID: "ECDFA4C0-B041-11E4-8B67-0002A5D5C51B",
+    configCharUUID: "0AFF6F80-B042-11E4-9B66-0002A5D5C51B",
+    statusCharUUID: "F8A54120-B041-11E4-9BE7-0002A5D5C51B",
 };
 
 const IQOS_CMD = {
@@ -38,13 +34,17 @@ const state = {
     characteristics: [],
     commandCharacteristic: null,
     notificationCharacteristic: null,
+    batteryCharacteristic: null,
+    statsCharacteristic: null,
     deviceInfo: {
         name: null,
         model: null,
         serial: null,
         manufacturer: null,
         batteryPercent: null,
+        batteryVoltage: null,
         puffCount: null,
+        usageDays: null,
     },
     diagnosticsText: "",
 };
@@ -98,7 +98,7 @@ function dataToHex(dataView) {
 
 function dataToString(dataView) {
     const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
-    return new TextDecoder().decode(bytes);
+    return new TextDecoder().decode(bytes).replace(/\0/g, "");
 }
 
 function setConnectionState(status) {
@@ -143,7 +143,9 @@ function resetDeviceState() {
     state.characteristics = [];
     state.commandCharacteristic = null;
     state.notificationCharacteristic = null;
-    state.deviceInfo = { name: null, model: null, serial: null, manufacturer: null, batteryPercent: null, puffCount: null };
+    state.batteryCharacteristic = null;
+    state.statsCharacteristic = null;
+    state.deviceInfo = { name: null, model: null, serial: null, manufacturer: null, batteryPercent: null, batteryVoltage: null, puffCount: null, usageDays: null };
     el.deviceName.textContent = "–";
     el.batteryLevel.textContent = "–";
     el.rssi.textContent = "–";
@@ -151,7 +153,7 @@ function resetDeviceState() {
 
 function bluetoothAvailable() {
     if (!navigator.bluetooth) {
-        alert("Web Bluetooth non è disponibile. Usa Chrome o Edge su desktop/Android.");
+        alert("Web Bluetooth non disponibile. Usa Chrome/Edge desktop/Android.");
         appendLog("ERR", "Web Bluetooth non supportato.");
         return false;
     }
@@ -185,7 +187,7 @@ async function connect() {
             await enableNotifications(state.notificationCharacteristic);
         }
 
-        setTimeout(readDeviceInfo, 500);
+        setTimeout(readAllData, 500);
     } catch (error) {
         appendLog("ERR", error.message || String(error));
         resetDeviceState();
@@ -219,6 +221,16 @@ async function discoverGatt() {
                 state.notificationCharacteristic = characteristic;
                 appendLog("INFO", `✓ Notifiche: ${characteristic.uuid}`);
             }
+
+            if (characteristic.uuid === IQOS_BLE.batteryCharUUID) {
+                state.batteryCharacteristic = characteristic;
+                appendLog("INFO`, `✓ Batteria: ${characteristic.uuid}`);
+            }
+
+            if (characteristic.uuid === IQOS_BLE.statsCharUUID) {
+                state.statsCharacteristic = characteristic;
+                appendLog("INFO`, `✓ Stats: ${characteristic.uuid}`);
+            }
         }
     }
 }
@@ -241,27 +253,20 @@ function parseIQOSResponse(data) {
     const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     if (bytes.length < 2) return;
 
-    // Batteria: 0x11 XX
     if (bytes[0] === 0x11 && bytes.length >= 2) {
         const batteryPercent = bytes[1];
         state.deviceInfo.batteryPercent = batteryPercent;
         el.batteryLevel.textContent = `${batteryPercent}%`;
-        appendLog("INFO", `Batteria: ${batteryPercent}%`);
+        appendLog("INFO`, `Batteria: ${batteryPercent}%`);
     }
 
-    // Diagnostica: 0x12 BB PP PP PP PP
     if (bytes[0] === 0x12 && bytes.length >= 6) {
         const batteryPercent = bytes[1];
         const puffCount = (bytes[2] << 24) | (bytes[3] << 16) | (bytes[4] << 8) | bytes[5];
         state.deviceInfo.batteryPercent = batteryPercent;
         state.deviceInfo.puffCount = puffCount;
         el.batteryLevel.textContent = `${batteryPercent}%`;
-        appendLog("INFO", `Batteria: ${batteryPercent}%, Puff: ${puffCount}`);
-    }
-
-    // Device Info: 0x10 ...
-    if (bytes[0] === 0x10) {
-        appendLog("INFO", `Device Info RX: ${dataToHex(data)}`);
+        appendLog("INFO`, `Batteria: ${batteryPercent}%, Puff: ${puffCount}`);
     }
 }
 
@@ -279,42 +284,74 @@ function disconnect() {
     }
 }
 
-async function readDeviceInfo() {
-    appendLog("CMD", "Lettura info dispositivo...");
+async function readAllData() {
+    appendLog("CMD", "Lettura tutti i dati...");
 
-    // Leggi Device Information standard
+    // Device Information standard
     for (const { characteristic } of state.characteristics) {
         if (characteristic.properties.read) {
             try {
                 const value = await characteristic.readValue();
+                const hex = dataToHex(value);
                 const text = dataToString(value);
                 
                 if (characteristic.uuid === "2A24") {
                     state.deviceInfo.name = text;
                     el.deviceName.textContent = text;
-                    appendLog("INFO", `Nome: ${text}`);
+                    appendLog("INFO`, `Device Name: ${text}`);
                 } else if (characteristic.uuid === "2A28") {
                     state.deviceInfo.model = text;
-                    appendLog("INFO", `Modello: ${text}`);
+                    appendLog("INFO`, `Model: ${text}`);
                 } else if (characteristic.uuid === "2A25") {
                     state.deviceInfo.serial = text;
-                    appendLog("INFO", `Seriale: ${text}`);
+                    appendLog("INFO`, `Serial: ${text}`);
                 } else if (characteristic.uuid === "2A29") {
                     state.deviceInfo.manufacturer = text;
-                    appendLog("INFO", `Manufacturer: ${text}`);
+                    appendLog("INFO`, `Manufacturer: ${text}`);
+                } else if (characteristic.uuid === IQOS_BLE.batteryCharUUID) {
+                    // 77F38A30: battery info
+                    const batteryLow = bytes[1];
+                    state.deviceInfo.batteryPercent = batteryLow;
+                    el.batteryLevel.textContent = `${batteryLow}%`;
+                    appendLog("INFO`, `Batteria (77F38A30): ${batteryLow}%`);
+                } else if (characteristic.uuid === IQOS_BLE.statsCharUUID) {
+                    // ECDFA4C0: stats
+                    const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+                    const puffCount = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+                    state.deviceInfo.puffCount = puffCount;
+                    appendLog("INFO`, `Puff Count (ECDFA4C0): ${puffCount}`);
                 }
             } catch (e) {
                 // Ignora
             }
         }
     }
+}
 
-    // Richiesta info IQOS
+async function readDeviceInfo() {
+    appendLog("CMD", "Lettura info...");
+    await readAllData();
     await writeCommand([IQOS_CMD.READ_DEVICE_INFO, 0x00], "Read Device Info");
 }
 
 async function readBattery() {
     appendLog("CMD", "Lettura batteria...");
+    
+    // Leggi characteristic batteria dedicata
+    if (state.batteryCharacteristic && state.batteryCharacteristic.properties.read) {
+        try {
+            const value = await state.batteryCharacteristic.readValue();
+            const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+            const batteryPercent = bytes[1];
+            state.deviceInfo.batteryPercent = batteryPercent;
+            el.batteryLevel.textContent = `${batteryPercent}%`;
+            appendLog("INFO`, `Batteria: ${batteryPercent}%`);
+        } catch (e) {
+            appendLog("ERR", `Lettura batteria fallita: ${e.message}`);
+        }
+    }
+    
+    // Prova anche comando IQOS
     await writeCommand([IQOS_CMD.READ_BATTERY, 0x00], "Read Battery");
 }
 
@@ -339,12 +376,13 @@ async function readDiagnostics() {
         `Comandi: ${IQOS_BLE.commandCharacteristicUUID}`,
         `Notifiche: ${IQOS_BLE.notificationCharacteristicUUID}`,
         ``,
-        `=== Info ===`,
+        `=== Info Dispositivo ===`,
         `Nome: ${state.deviceInfo.name || "N/D"}`,
         `Modello: ${state.deviceInfo.model || "N/D"}`,
         `Seriale: ${state.deviceInfo.serial || "N/D"}`,
+        `Manufacturer: ${state.deviceInfo.manufacturer || "N/D"}`,
         `Batteria: ${state.deviceInfo.batteryPercent !== null ? `${state.deviceInfo.batteryPercent}%` : "N/D"}`,
-        `Puff: ${state.deviceInfo.puffCount !== null ? state.deviceInfo.puffCount : "N/D"}`,
+        `Puff Count: ${state.deviceInfo.puffCount !== null ? state.deviceInfo.puffCount : "N/D"}`,
         ``,
         `=== GATT ===`,
         ...characteristicLines,
@@ -462,6 +500,6 @@ el.btnClearLog.addEventListener("click", () => { el.bleLog.textContent = ""; });
 
 setConnectionState("disconnected");
 appendLog("SYS", "IQOS Control Web avviato.");
-appendLog("INFO", `Servizio: ${IQOS_BLE.serviceUUID}`);
-appendLog("INFO", `Comandi: ${IQOS_BLE.commandCharacteristicUUID}`);
-appendLog("INFO", `Notifiche: ${IQOS_BLE.notificationCharacteristicUUID}`);
+appendLog("INFO`, `Servizio: ${IQOS_BLE.serviceUUID}`);
+appendLog("INFO`, `Comandi: ${IQOS_BLE.commandCharacteristicUUID}`);
+appendLog("INFO`, `Notifiche: ${IQOS_BLE.notificationCharacteristicUUID}`);
