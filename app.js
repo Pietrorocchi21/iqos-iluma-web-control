@@ -44,52 +44,57 @@ const state = {
     diagnosticsText: "",
 };
 
-const el = {
-    connectionState: document.querySelector("#connectionState"),
-    deviceName: document.querySelector("#deviceName"),
-    batteryLevel: document.querySelector("#batteryLevel"),
-    rssi: document.querySelector("#rssi"),
-    diagnosticsOutput: document.querySelector("#diagnosticsOutput"),
-    bleLog: document.querySelector("#bleLog"),
-    btnConnect: document.querySelector("#btnConnect"),
-    btnDisconnect: document.querySelector("#btnDisconnect"),
-    btnReadInfo: document.querySelector("#btnReadInfo"),
-    btnReadBattery: document.querySelector("#btnReadBattery"),
-    btnReadDiagnostics: document.querySelector("#btnReadDiagnostics"),
-    brightnessSelect: document.querySelector("#brightnessSelect"),
-    btnSetBrightness: document.querySelector("#btnSetBrightness"),
-    vibrationToggle: document.querySelector("#vibrationToggle"),
-    btnSetVibration: document.querySelector("#btnSetVibration"),
-    btnCopyDiagnostics: document.querySelector("#btnCopyDiagnostics"),
-    btnCopyLog: document.querySelector("#btnCopyLog"),
-    btnClearLog: document.querySelector("#btnClearLog"),
-    autoStartToggle: document.querySelector("#autoStartToggle"),
-    btnSetAutoStart: document.querySelector("#btnSetAutoStart"),
-    smartGestureToggle: document.querySelector("#smartGestureToggle"),
-    btnSetSmartGesture: document.querySelector("#btnSetSmartGesture"),
-    flexPuffToggle: document.querySelector("#flexPuffToggle"),
-    btnSetFlexPuff: document.querySelector("#btnSetFlexPuff"),
-    flexBatteryToggle: document.querySelector("#flexBatteryToggle"),
-    btnSetFlexBattery: document.querySelector("#btnSetFlexBattery"),
-    pauseModeToggle: document.querySelector("#pauseModeToggle"),
-    btnSetPauseMode: document.querySelector("#btnSetPauseMode"),
-    btnFindMyIQOS: document.querySelector("#btnFindMyIQOS"),
-    btnLockDevice: document.querySelector("#btnLockDevice"),
-    btnUnlockDevice: document.querySelector("#btnUnlockDevice"),
-};
+let el = null;
+
+function initElements() {
+    el = {
+        connectionState: document.querySelector("#connectionState"),
+        deviceName: document.querySelector("#deviceName"),
+        batteryLevel: document.querySelector("#batteryLevel"),
+        rssi: document.querySelector("#rssi"),
+        diagnosticsOutput: document.querySelector("#diagnosticsOutput"),
+        bleLog: document.querySelector("#bleLog"),
+        btnConnect: document.querySelector("#btnConnect"),
+        btnDisconnect: document.querySelector("#btnDisconnect"),
+        btnReadInfo: document.querySelector("#btnReadInfo"),
+        btnReadBattery: document.querySelector("#btnReadBattery"),
+        btnReadDiagnostics: document.querySelector("#btnReadDiagnostics"),
+        brightnessSelect: document.querySelector("#brightnessSelect"),
+        btnSetBrightness: document.querySelector("#btnSetBrightness"),
+        vibrationToggle: document.querySelector("#vibrationToggle"),
+        btnSetVibration: document.querySelector("#btnSetVibration"),
+        btnCopyDiagnostics: document.querySelector("#btnCopyDiagnostics"),
+        btnCopyLog: document.querySelector("#btnCopyLog"),
+        btnClearLog: document.querySelector("#btnClearLog"),
+        autoStartToggle: document.querySelector("#autoStartToggle"),
+        btnSetAutoStart: document.querySelector("#btnSetAutoStart"),
+        smartGestureToggle: document.querySelector("#smartGestureToggle"),
+        btnSetSmartGesture: document.querySelector("#btnSetSmartGesture"),
+        flexPuffToggle: document.querySelector("#flexPuffToggle"),
+        btnSetFlexPuff: document.querySelector("#btnSetFlexPuff"),
+        flexBatteryToggle: document.querySelector("#flexBatteryToggle"),
+        btnSetFlexBattery: document.querySelector("#btnSetFlexBattery"),
+        pauseModeToggle: document.querySelector("#pauseModeToggle"),
+        btnSetPauseMode: document.querySelector("#btnSetPauseMode"),
+        btnFindMyIQOS: document.querySelector("#btnFindMyIQOS"),
+        btnLockDevice: document.querySelector("#btnLockDevice"),
+        btnUnlockDevice: document.querySelector("#btnUnlockDevice"),
+    };
+}
 
 function timestamp() {
     return new Date().toLocaleTimeString("it-IT", { hour12: false });
 }
 
 function appendLog(kind, message) {
-    const line = `[${timestamp()}] [${kind}] ${message}`;
-    el.bleLog.textContent = `${line}\n${el.bleLog.textContent}`.slice(0, 30000);
+    if (!el || !el.bleLog) return;
+    const line = "[" + timestamp() + "] [" + kind + "] " + message;
+    el.bleLog.textContent = (line + "\n" + el.bleLog.textContent).slice(0, 30000);
 }
 
 function dataToHex(dataView) {
     const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
-    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join(" ").toUpperCase();
+    return Array.from(bytes, function(byte) { return byte.toString(16).padStart(2, "0"); }).join(" ").toUpperCase();
 }
 
 function dataToString(dataView) {
@@ -98,40 +103,45 @@ function dataToString(dataView) {
 }
 
 function setConnectionState(status) {
-    const config = {
-        disconnected: { text: "Disconnesso", className: "badge badge-secondary" },
-        connecting: { text: "Connessione…", className: "badge badge-warning" },
-        connected: { text: "Connesso", className: "badge badge-success" },
-    }[status];
+    if (!el) return;
+    
+    var config;
+    if (status === "disconnected") {
+        config = { text: "Disconnesso", className: "badge badge-secondary" };
+    } else if (status === "connecting") {
+        config = { text: "Connessione...", className: "badge badge-warning" };
+    } else {
+        config = { text: "Connesso", className: "badge badge-success" };
+    }
 
     el.connectionState.textContent = config.text;
     el.connectionState.className = config.className;
 
-    const connected = status === "connected";
-    el.btnConnect.disabled = connected;
-    el.btnDisconnect.disabled = !connected;
-    el.btnReadInfo.disabled = !connected;
-    el.btnReadBattery.disabled = !connected;
-    el.btnReadDiagnostics.disabled = !connected;
-    el.brightnessSelect.disabled = !connected;
-    el.btnSetBrightness.disabled = !connected;
-    el.vibrationToggle.disabled = !connected;
-    el.btnSetVibration.disabled = !connected;
-    el.btnCopyDiagnostics.disabled = !connected;
-    el.btnCopyLog.disabled = !connected;
-    el.autoStartToggle.disabled = !connected;
-    el.btnSetAutoStart.disabled = !connected;
-    el.smartGestureToggle.disabled = !connected;
-    el.btnSetSmartGesture.disabled = !connected;
-    el.flexPuffToggle.disabled = !connected;
-    el.btnSetFlexPuff.disabled = !connected;
-    el.flexBatteryToggle.disabled = !connected;
-    el.btnSetFlexBattery.disabled = !connected;
-    el.pauseModeToggle.disabled = !connected;
-    el.btnSetPauseMode.disabled = !connected;
-    el.btnFindMyIQOS.disabled = !connected;
-    el.btnLockDevice.disabled = !connected;
-    el.btnUnlockDevice.disabled = !connected;
+    var connected = (status === "connected");
+    if (el.btnConnect) el.btnConnect.disabled = connected;
+    if (el.btnDisconnect) el.btnDisconnect.disabled = !connected;
+    if (el.btnReadInfo) el.btnReadInfo.disabled = !connected;
+    if (el.btnReadBattery) el.btnReadBattery.disabled = !connected;
+    if (el.btnReadDiagnostics) el.btnReadDiagnostics.disabled = !connected;
+    if (el.brightnessSelect) el.brightnessSelect.disabled = !connected;
+    if (el.btnSetBrightness) el.btnSetBrightness.disabled = !connected;
+    if (el.vibrationToggle) el.vibrationToggle.disabled = !connected;
+    if (el.btnSetVibration) el.btnSetVibration.disabled = !connected;
+    if (el.btnCopyDiagnostics) el.btnCopyDiagnostics.disabled = !connected;
+    if (el.btnCopyLog) el.btnCopyLog.disabled = !connected;
+    if (el.autoStartToggle) el.autoStartToggle.disabled = !connected;
+    if (el.btnSetAutoStart) el.btnSetAutoStart.disabled = !connected;
+    if (el.smartGestureToggle) el.smartGestureToggle.disabled = !connected;
+    if (el.btnSetSmartGesture) el.btnSetSmartGesture.disabled = !connected;
+    if (el.flexPuffToggle) el.flexPuffToggle.disabled = !connected;
+    if (el.btnSetFlexPuff) el.btnSetFlexPuff.disabled = !connected;
+    if (el.flexBatteryToggle) el.flexBatteryToggle.disabled = !connected;
+    if (el.btnSetFlexBattery) el.btnSetFlexBattery.disabled = !connected;
+    if (el.pauseModeToggle) el.pauseModeToggle.disabled = !connected;
+    if (el.btnSetPauseMode) el.btnSetPauseMode.disabled = !connected;
+    if (el.btnFindMyIQOS) el.btnFindMyIQOS.disabled = !connected;
+    if (el.btnLockDevice) el.btnLockDevice.disabled = !connected;
+    if (el.btnUnlockDevice) el.btnUnlockDevice.disabled = !connected;
 }
 
 function resetDeviceState() {
@@ -143,9 +153,11 @@ function resetDeviceState() {
     state.batteryCharacteristic = null;
     state.statsCharacteristic = null;
     state.deviceInfo = { name: null, model: null, serial: null, manufacturer: null, batteryPercent: null, puffCount: null };
-    el.deviceName.textContent = "–";
-    el.batteryLevel.textContent = "–";
-    el.rssi.textContent = "–";
+    if (el) {
+        el.deviceName.textContent = "–";
+        el.batteryLevel.textContent = "–";
+        el.rssi.textContent = "–";
+    }
 }
 
 function bluetoothAvailable() {
@@ -164,7 +176,7 @@ async function connect() {
         setConnectionState("connecting");
         appendLog("SYS", "Apertura selettore Bluetooth.");
 
-        const options = {
+        var options = {
             acceptAllDevices: true,
             optionalServices: [IQOS_BLE.serviceUUID, "0000180a-0000-1000-8000-00805f9b34fb"],
         };
@@ -195,18 +207,20 @@ async function connect() {
 async function discoverGatt() {
     if (!state.server) return;
 
-    const services = await state.server.getPrimaryServices();
+    var services = await state.server.getPrimaryServices();
     state.services = services;
     appendLog("GATT", "Servizi trovati: " + services.length);
 
-    for (const service of services) {
+    for (var i = 0; i < services.length; i++) {
+        var service = services[i];
         appendLog("GATT", "Service " + service.uuid);
-        const characteristics = await service.getCharacteristics();
+        var characteristics = await service.getCharacteristics();
 
-        for (const characteristic of characteristics) {
-            state.characteristics.push({ serviceUUID: service.uuid, characteristic });
-            const p = characteristic.properties;
-            const properties = [p.read && "read", p.write && "write", p.writeWithoutResponse && "writeWithoutResponse", p.notify && "notify", p.indicate && "indicate"].filter(Boolean).join(", ");
+        for (var j = 0; j < characteristics.length; j++) {
+            var characteristic = characteristics[j];
+            state.characteristics.push({ serviceUUID: service.uuid, characteristic: characteristic });
+            var p = characteristic.properties;
+            var properties = [p.read && "read", p.write && "write", p.writeWithoutResponse && "writeWithoutResponse", p.notify && "notify", p.indicate && "indicate"].filter(Boolean).join(", ");
             appendLog("GATT", "  Char " + characteristic.uuid + " [" + (properties || "nessuna") + "]");
 
             if (characteristic.uuid === IQOS_BLE.commandCharacteristicUUID) {
@@ -240,26 +254,26 @@ async function enableNotifications(characteristic) {
 }
 
 function onNotification(event) {
-    const characteristic = event.target;
-    const value = characteristic.value;
+    var characteristic = event.target;
+    var value = characteristic.value;
     appendLog("RX", characteristic.uuid + ": " + dataToHex(value));
     parseIQOSResponse(value);
 }
 
 function parseIQOSResponse(data) {
-    const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    var bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     if (bytes.length < 2) return;
 
     if (bytes[0] === 0x11 && bytes.length >= 2) {
-        const batteryPercent = bytes[1];
+        var batteryPercent = bytes[1];
         state.deviceInfo.batteryPercent = batteryPercent;
         el.batteryLevel.textContent = batteryPercent + "%";
         appendLog("INFO", "Batteria: " + batteryPercent + "%");
     }
 
     if (bytes[0] === 0x12 && bytes.length >= 6) {
-        const batteryPercent = bytes[1];
-        const puffCount = (bytes[2] << 24) | (bytes[3] << 16) | (bytes[4] << 8) | bytes[5];
+        var batteryPercent = bytes[1];
+        var puffCount = (bytes[2] << 24) | (bytes[3] << 16) | (bytes[4] << 8) | bytes[5];
         state.deviceInfo.batteryPercent = batteryPercent;
         state.deviceInfo.puffCount = puffCount;
         el.batteryLevel.textContent = batteryPercent + "%";
@@ -274,7 +288,7 @@ function onDisconnected() {
 }
 
 function disconnect() {
-    if (state.device?.gatt?.connected) {
+    if (state.device && state.device.gatt && state.device.gatt.connected) {
         state.device.gatt.disconnect();
     } else {
         onDisconnected();
@@ -284,14 +298,15 @@ function disconnect() {
 async function readAllData() {
     appendLog("CMD", "Lettura tutti i dati...");
 
-    for (const item of state.characteristics) {
-        const characteristic = item.characteristic;
+    for (var i = 0; i < state.characteristics.length; i++) {
+        var item = state.characteristics[i];
+        var characteristic = item.characteristic;
         if (characteristic.properties.read) {
             try {
-                const value = await characteristic.readValue();
-                const hex = dataToHex(value);
-                const text = dataToString(value);
-                const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+                var value = await characteristic.readValue();
+                var hex = dataToHex(value);
+                var text = dataToString(value);
+                var bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
                 
                 if (characteristic.uuid === "2A24") {
                     state.deviceInfo.name = text;
@@ -307,14 +322,12 @@ async function readAllData() {
                     state.deviceInfo.manufacturer = text;
                     appendLog("INFO", "Manufacturer: " + text);
                 } else if (characteristic.uuid === IQOS_BLE.batteryCharUUID) {
-                    // 77F38A30: battery info - byte[1] should be percentage
-                    const batteryPercent = bytes[1];
+                    var batteryPercent = bytes[1];
                     state.deviceInfo.batteryPercent = batteryPercent;
                     el.batteryLevel.textContent = batteryPercent + "%";
                     appendLog("INFO", "Batteria (77F38A30): " + batteryPercent + "% (" + hex + ")");
                 } else if (characteristic.uuid === IQOS_BLE.statsCharUUID) {
-                    // ECDFA4C0: stats - first 4 bytes should be puff count
-                    const puffCount = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+                    var puffCount = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
                     state.deviceInfo.puffCount = puffCount;
                     appendLog("INFO", "Puff Count (ECDFA4C0): " + puffCount + " (" + hex + ")");
                 }
@@ -336,9 +349,9 @@ async function readBattery() {
     
     if (state.batteryCharacteristic && state.batteryCharacteristic.properties.read) {
         try {
-            const value = await state.batteryCharacteristic.readValue();
-            const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-            const batteryPercent = bytes[1];
+            var value = await state.batteryCharacteristic.readValue();
+            var bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+            var batteryPercent = bytes[1];
             state.deviceInfo.batteryPercent = batteryPercent;
             el.batteryLevel.textContent = batteryPercent + "%";
             appendLog("INFO", "Batteria: " + batteryPercent + "%");
@@ -354,17 +367,19 @@ async function readDiagnostics() {
     appendLog("CMD", "Lettura diagnostica...");
     await writeCommand([IQOS_CMD.READ_DIAGNOSTIC, 0x00], "Read Diagnostic");
 
-    const characteristicLines = state.characteristics.map(function(item) {
-        const p = item.characteristic.properties;
-        const capabilities = [p.read && "read", p.write && "write", p.writeWithoutResponse && "writeWithoutResponse", p.notify && "notify", p.indicate && "indicate"].filter(Boolean).join(", ");
-        return item.serviceUUID + "\n  └─ " + item.characteristic.uuid + " (" + (capabilities || "nessuna") + ")";
-    });
+    var characteristicLines = [];
+    for (var i = 0; i < state.characteristics.length; i++) {
+        var item = state.characteristics[i];
+        var p = item.characteristic.properties;
+        var capabilities = [p.read && "read", p.write && "write", p.writeWithoutResponse && "writeWithoutResponse", p.notify && "notify", p.indicate && "indicate"].filter(Boolean).join(", ");
+        characteristicLines.push(item.serviceUUID + "\n  └─ " + item.characteristic.uuid + " (" + (capabilities || "nessuna") + ")");
+    }
 
     state.diagnosticsText = [
         "=== IQOS Control — Diagnostica ===",
         "Data: " + new Date().toLocaleString("it-IT"),
         "Dispositivo: " + (state.device.name || "N/D"),
-        "Stato: " + (state.device.gatt?.connected ? "Connesso" : "Disconnesso"),
+        "Stato: " + (state.device.gatt && state.device.gatt.connected ? "Connesso" : "Disconnesso"),
         "",
         "=== UUID IQOS ===",
         "Servizio: " + IQOS_BLE.serviceUUID,
@@ -391,8 +406,9 @@ async function writeCommand(bytes, description) {
         return;
     }
 
-    const data = Uint8Array.from(bytes);
-    appendLog("TX", description + ": " + Array.from(data, function(b) { return b.toString(16).padStart(2, "0"); }).join(" ").toUpperCase());
+    var data = Uint8Array.from(bytes);
+    var hexStr = Array.from(data, function(b) { return b.toString(16).padStart(2, "0"); }).join(" ").toUpperCase();
+    appendLog("TX", description + ": " + hexStr);
 
     try {
         if (state.commandCharacteristic.properties.write) {
@@ -407,43 +423,43 @@ async function writeCommand(bytes, description) {
 }
 
 async function setBrightness() {
-    const level = parseInt(el.brightnessSelect.value, 10);
+    var level = parseInt(el.brightnessSelect.value, 10);
     appendLog("CMD", "Brightness: " + level);
     await writeCommand([IQOS_CMD.SET_BRIGHTNESS, level], "Set Brightness");
 }
 
 async function setVibration() {
-    const enabled = el.vibrationToggle.checked ? 0x01 : 0x00;
+    var enabled = el.vibrationToggle.checked ? 0x01 : 0x00;
     appendLog("CMD", "Vibration: " + (enabled ? "ON" : "OFF"));
     await writeCommand([IQOS_CMD.SET_VIBRATION, enabled], "Set Vibration");
 }
 
 async function setAutoStart() {
-    const enabled = el.autoStartToggle.checked ? 0x01 : 0x00;
+    var enabled = el.autoStartToggle.checked ? 0x01 : 0x00;
     appendLog("CMD", "AutoStart: " + (enabled ? "ON" : "OFF"));
     await writeCommand([IQOS_CMD.SET_AUTOSTART, enabled], "Set AutoStart");
 }
 
 async function setSmartGesture() {
-    const enabled = el.smartGestureToggle.checked ? 0x01 : 0x00;
+    var enabled = el.smartGestureToggle.checked ? 0x01 : 0x00;
     appendLog("CMD", "Smart Gesture: " + (enabled ? "ON" : "OFF"));
     await writeCommand([IQOS_CMD.SET_SMART_GESTURE, enabled], "Set Smart Gesture");
 }
 
 async function setFlexPuff() {
-    const enabled = el.flexPuffToggle.checked ? 0x01 : 0x00;
+    var enabled = el.flexPuffToggle.checked ? 0x01 : 0x00;
     appendLog("CMD", "FlexPuff: " + (enabled ? "ON" : "OFF"));
     await writeCommand([IQOS_CMD.SET_FLEXPUFF, enabled], "Set FlexPuff");
 }
 
 async function setFlexBattery() {
-    const enabled = el.flexBatteryToggle.checked ? 0x01 : 0x00;
+    var enabled = el.flexBatteryToggle.checked ? 0x01 : 0x00;
     appendLog("CMD", "FlexBattery: " + (enabled ? "ON" : "OFF"));
     await writeCommand([IQOS_CMD.SET_FLEXBATTERY, enabled], "Set FlexBattery");
 }
 
 async function setPauseMode() {
-    const enabled = el.pauseModeToggle.checked ? 0x01 : 0x00;
+    var enabled = el.pauseModeToggle.checked ? 0x01 : 0x00;
     appendLog("CMD", "Pause Mode: " + (enabled ? "ON" : "OFF"));
     await writeCommand([IQOS_CMD.SET_PAUSE_MODE, enabled], "Set Pause Mode");
 }
@@ -475,7 +491,7 @@ async function copyDiagnostics() {
 
 async function copyLog() {
     try {
-        const logText = el.bleLog.textContent;
+        var logText = el.bleLog.textContent;
         await navigator.clipboard.writeText(logText);
         appendLog("SYS", "Log copiato.");
         alert("✓ Log BLE copiato!");
@@ -484,28 +500,39 @@ async function copyLog() {
     }
 }
 
-// Event listeners
-el.btnConnect.addEventListener("click", connect);
-el.btnDisconnect.addEventListener("click", disconnect);
-el.btnReadInfo.addEventListener("click", readDeviceInfo);
-el.btnReadBattery.addEventListener("click", readBattery);
-el.btnReadDiagnostics.addEventListener("click", readDiagnostics);
-el.btnSetBrightness.addEventListener("click", setBrightness);
-el.btnSetVibration.addEventListener("click", setVibration);
-el.btnSetAutoStart.addEventListener("click", setAutoStart);
-el.btnSetSmartGesture.addEventListener("click", setSmartGesture);
-el.btnSetFlexPuff.addEventListener("click", setFlexPuff);
-el.btnSetFlexBattery.addEventListener("click", setFlexBattery);
-el.btnSetPauseMode.addEventListener("click", setPauseMode);
-el.btnFindMyIQOS.addEventListener("click", findMyIQOS);
-el.btnLockDevice.addEventListener("click", lockDevice);
-el.btnUnlockDevice.addEventListener("click", unlockDevice);
-el.btnCopyDiagnostics.addEventListener("click", copyDiagnostics);
-el.btnCopyLog.addEventListener("click", copyLog);
-el.btnClearLog.addEventListener("click", function() { el.bleLog.textContent = ""; });
+// Inizializza quando il DOM è pronto
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initAndStart);
+} else {
+    initAndStart();
+}
 
-setConnectionState("disconnected");
-appendLog("SYS", "IQOS Control Web avviato.");
-appendLog("INFO", "Servizio: " + IQOS_BLE.serviceUUID);
-appendLog("INFO", "Comandi: " + IQOS_BLE.commandCharacteristicUUID);
-appendLog("INFO", "Notifiche: " + IQOS_BLE.notificationCharacteristicUUID);
+function initAndStart() {
+    initElements();
+    
+    // Event listeners
+    el.btnConnect.addEventListener("click", connect);
+    el.btnDisconnect.addEventListener("click", disconnect);
+    el.btnReadInfo.addEventListener("click", readDeviceInfo);
+    el.btnReadBattery.addEventListener("click", readBattery);
+    el.btnReadDiagnostics.addEventListener("click", readDiagnostics);
+    el.btnSetBrightness.addEventListener("click", setBrightness);
+    el.btnSetVibration.addEventListener("click", setVibration);
+    el.btnSetAutoStart.addEventListener("click", setAutoStart);
+    el.btnSetSmartGesture.addEventListener("click", setSmartGesture);
+    el.btnSetFlexPuff.addEventListener("click", setFlexPuff);
+    el.btnSetFlexBattery.addEventListener("click", setFlexBattery);
+    el.btnSetPauseMode.addEventListener("click", setPauseMode);
+    el.btnFindMyIQOS.addEventListener("click", findMyIQOS);
+    el.btnLockDevice.addEventListener("click", lockDevice);
+    el.btnUnlockDevice.addEventListener("click", unlockDevice);
+    el.btnCopyDiagnostics.addEventListener("click", copyDiagnostics);
+    el.btnCopyLog.addEventListener("click", copyLog);
+    el.btnClearLog.addEventListener("click", function() { el.bleLog.textContent = ""; });
+
+    setConnectionState("disconnected");
+    appendLog("SYS", "IQOS Control Web avviato.");
+    appendLog("INFO", "Servizio: " + IQOS_BLE.serviceUUID);
+    appendLog("INFO", "Comandi: " + IQOS_BLE.commandCharacteristicUUID);
+    appendLog("INFO", "Notifiche: " + IQOS_BLE.notificationCharacteristicUUID);
+}
